@@ -43,15 +43,17 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
+	"html/template"
 	"io"
 	"io/ioutil"
 	"log"
 	"os"
 	"strings"
 
-	. "github.com/ChimeraCoder/gojson"
+	. "github.com/huangnauh/gojson"
 )
 
 var (
@@ -63,7 +65,12 @@ var (
 	tags        = flag.String("tags", "fmt", "comma seperated list of the tags to put on the struct, default is the same as fmt")
 	forceFloats = flag.Bool("forcefloats", false, "[experimental] force float64 type for integral values")
 	subStruct   = flag.Bool("subStruct", false, "create types for sub-structs (default is false)")
+	extra       = flag.String("extra", "", "extra template file")
 )
+
+type TemplateData struct {
+	Name string
+}
 
 func main() {
 	flag.Parse()
@@ -108,18 +115,45 @@ func main() {
 		parser = ParseYaml
 	}
 
-	if output, err := Generate(input, parser, *name, *pkg, tagList, *subStruct, convertFloats); err != nil {
+	output, err := Generate(input, parser, *name, *pkg, tagList, *subStruct, convertFloats)
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "error parsing", err)
 		os.Exit(1)
-	} else {
-		if *outputName != "" {
-			err := ioutil.WriteFile(*outputName, output, 0644)
-			if err != nil {
-				log.Fatalf("writing output: %s", err)
-			}
-		} else {
-			fmt.Print(string(output))
+	}
+
+	funcMap := template.FuncMap{
+		"ToUpper": strings.ToUpper,
+		"ToLower": strings.ToLower,
+	}
+
+	if *extra != "" {
+		b, err := ioutil.ReadFile(*extra)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "error read file", err)
+			os.Exit(1)
 		}
+		tmpl, err := template.New("template").Funcs(funcMap).Parse(string(b))
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "error parse file", err)
+			os.Exit(1)
+		}
+		templateDate := TemplateData{*name}
+		var result bytes.Buffer
+		err = tmpl.Execute(&result, templateDate)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "error execute template", err)
+			os.Exit(1)
+		}
+		output = append(output, result.Bytes()...)
+	}
+
+	if *outputName != "" {
+		err := ioutil.WriteFile(*outputName, output, 0644)
+		if err != nil {
+			log.Fatalf("writing output: %s", err)
+		}
+	} else {
+		fmt.Print(string(output))
 	}
 
 }

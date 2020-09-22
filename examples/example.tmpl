@@ -1,0 +1,9 @@
+
+func (m *{{.Name}}) Name() string {
+	return "{{.Name | ToLower }}"
+}
+
+func (m *{{.Name}}) Clone() Model {
+	cm := *m
+	return &cm
+}
